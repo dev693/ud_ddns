@@ -71,9 +71,7 @@ try
 
     var ip = await client.GetStringAsync("https://api.ipify.org/");
     //var ip = "1.1.1.1";
-    Console.ForegroundColor = ConsoleColor.Blue;
-    Console.WriteLine($"current ip is {ip}");
-    Console.ForegroundColor = ConsoleColor.White;
+    LogInfo($"current ip is {ip}");
 
     client.DefaultRequestHeaders.Add("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9");
     client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36");
@@ -137,24 +135,24 @@ try
         var get_records_response = await client.GetAsync($"https://www.united-domains.de/pfapi/dns/domain/{domain_id}/records");
         if (!get_records_response.IsSuccessStatusCode)
         {
-            Console.WriteLine($"domain {domain} update failed, couldn't get records");
+            LogError($"domain {domain} update failed, couldn't get records");
             continue;
         }
 
         var dns_recorods = JObject.Parse(await get_records_response.Content.ReadAsStringAsync())!;
 
-        var record = dns_recorods["data"]["A"]!.First(e => e!["filter_value"]!.ToString() == domain)!;
+        var record = dns_recorods["data"]!["A"]!.First(e => e!["filter_value"]!.ToString() == domain)!;
 
-        int record_id = record["id"].Value<int>();
-        int record_type = record["udag_record_type"].Value<int>();
-        string record_filter_value = record["filter_value"].Value<string>();
-        string record_content = record["content"].Value<string>();
-        string record_domain = record["domain"].Value<string>();
-        string record_subdomain = record["sub_domain"].Value<string>();
+        var record_id = record["id"];
+        var record_type = record["udag_record_type"];
+        var record_filter_value = record["filter_value"];
+        var record_content = record["content"];
+        var record_domain = record["domain"];
+        var record_subdomain = record["sub_domain"];
 
         var payload = new Dictionary<string, object>()
         {
-            ["record"] = new Dictionary<string, object>()
+            ["record"] = new Dictionary<string, object?>()
             {
                 ["address"] = ip,
                 ["content"] = record_content,
@@ -182,27 +180,39 @@ try
         var json = JsonConvert.SerializeObject(payload);
         var change = await client.PutAsync($"https://www.united-domains.de/pfapi/dns/domain/{domain_id}/records", new StringContent(json, Encoding.UTF8, "application/json"));
         if (change.IsSuccessStatusCode)
-        {
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"domain {domain} updated to ip {ip}");
-            Console.ForegroundColor = ConsoleColor.White;
-        }
+            LogSuccess($"domain {domain} updated to ip {ip}");
         else
-        {
-
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"domain {domain} update failed with error: {change.StatusCode}");
-            Console.ForegroundColor = ConsoleColor.White;
-        }
+            LogError($"domain {domain} update failed with error: {change.StatusCode}");
     }
 
     return 0;
 }
 catch (Exception ex)
 {
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine(ex.Message);
-    Console.ForegroundColor = ConsoleColor.White;
+    LogError(ex.Message);
     return 1;
 }
 
+static void LogError(string text)
+{
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine(text);
+    File.AppendAllText("ud_ddns.log", $"[ERROR] {text}{Environment.NewLine}");
+    Console.ForegroundColor = ConsoleColor.White;
+}
+
+static void LogSuccess(string text)
+{
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine(text);
+    File.AppendAllText("ud_ddns.log", $"[SUCCESS] {text}{Environment.NewLine}");
+    Console.ForegroundColor = ConsoleColor.White;
+}
+
+static void LogInfo(string text)
+{
+    Console.ForegroundColor = ConsoleColor.Blue;
+    Console.WriteLine(text);
+    File.AppendAllText("ud_ddns.log", $"[INFO] {text}{Environment.NewLine}");
+    Console.ForegroundColor = ConsoleColor.White;
+}

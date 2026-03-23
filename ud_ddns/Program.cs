@@ -7,7 +7,8 @@ using System.Text.RegularExpressions;
 using Telegram.Bot;
 
 var tgToken = string.Empty;
-var tgChatId = string.Empty;
+var tgChatId = 0L;
+TelegramBotClient? tgBot = null;
 
 try
 {
@@ -72,13 +73,17 @@ try
             if (++i >= args.Length)
                 throw new ArgumentException("tg_chatid not specified");
 
-            tgChatId = args[i];
+            if (!long.TryParse(args[i], out tgChatId))
+                throw new ArgumentException("tg_chatid must be a valid numeric chat ID");
         }
 
     }
 
     if (string.IsNullOrEmpty(mail) || string.IsNullOrEmpty(password) || domains.Length == 0)
         throw new ArgumentException("Usage: -mail <mail> -pw <password> -domain <domain1> <domain2> [-tg_token <token> -tg_chatid <chatid>]");
+
+    if (!string.IsNullOrEmpty(tgToken) && tgChatId != 0)
+        tgBot = new TelegramBotClient(tgToken);
 
     var cookieContainer = new CookieContainer();
     var client = new HttpClient(new HttpClientHandler()
@@ -244,13 +249,12 @@ static void LogInfo(string text)
 
 async Task SendTelegramMessage(string message)
 {
-    if (string.IsNullOrEmpty(tgToken) || string.IsNullOrEmpty(tgChatId))
+    if (tgBot is null)
         return;
 
     try
     {
-        var bot = new TelegramBotClient(tgToken);
-        await bot.SendMessage(long.Parse(tgChatId), message);
+        await tgBot.SendMessage(tgChatId, message);
     }
     catch (Exception ex)
     {

@@ -4,6 +4,10 @@ using Newtonsoft.Json.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using Telegram.Bot;
+
+var tgToken = string.Empty;
+var tgChatId = string.Empty;
 
 try
 {
@@ -55,10 +59,26 @@ try
             domains = list.ToArray();
         }
 
+        if (arg == "-tg_token")
+        {
+            if (++i >= args.Length)
+                throw new ArgumentException("tg_token not specified");
+
+            tgToken = args[i];
+        }
+
+        if (arg == "-tg_chatid")
+        {
+            if (++i >= args.Length)
+                throw new ArgumentException("tg_chatid not specified");
+
+            tgChatId = args[i];
+        }
+
     }
 
     if (string.IsNullOrEmpty(mail) || string.IsNullOrEmpty(password) || domains.Length == 0)
-        throw new ArgumentException("Usage: -mail <mail> -pw <password> -domain <domain1> <domain2>");
+        throw new ArgumentException("Usage: -mail <mail> -pw <password> -domain <domain1> <domain2> [-tg_token <token> -tg_chatid <chatid>]");
 
     var cookieContainer = new CookieContainer();
     var client = new HttpClient(new HttpClientHandler()
@@ -136,6 +156,7 @@ try
         if (!get_records_response.IsSuccessStatusCode)
         {
             LogError($"domain {domain} update failed, couldn't get records");
+            await SendTelegramMessage($"domain {domain} update failed, couldn't get records");
             continue;
         }
 
@@ -182,7 +203,10 @@ try
         if (change.IsSuccessStatusCode)
             LogSuccess($"domain {domain} updated to ip {ip}");
         else
+        {
             LogError($"domain {domain} update failed with error: {change.StatusCode}");
+            await SendTelegramMessage($"domain {domain} update failed with error: {change.StatusCode}");
+        }
     }
 
     return 0;
@@ -190,6 +214,7 @@ try
 catch (Exception ex)
 {
     LogError(ex.Message);
+    await SendTelegramMessage($"ud_ddns error: {ex.Message}");
     return 1;
 }
 
@@ -215,4 +240,20 @@ static void LogInfo(string text)
     Console.WriteLine(text);
     File.AppendAllText("ud_ddns.log", $"[INFO] {text}{Environment.NewLine}");
     Console.ForegroundColor = ConsoleColor.White;
+}
+
+async Task SendTelegramMessage(string message)
+{
+    if (string.IsNullOrEmpty(tgToken) || string.IsNullOrEmpty(tgChatId))
+        return;
+
+    try
+    {
+        var bot = new TelegramBotClient(tgToken);
+        await bot.SendMessage(long.Parse(tgChatId), message);
+    }
+    catch (Exception ex)
+    {
+        LogError($"failed to send Telegram notification: {ex.Message}");
+    }
 }

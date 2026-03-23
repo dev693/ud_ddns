@@ -206,7 +206,10 @@ try
         var json = JsonConvert.SerializeObject(payload);
         var change = await client.PutAsync($"https://www.united-domains.de/pfapi/dns/domain/{domain_id}/records", new StringContent(json, Encoding.UTF8, "application/json"));
         if (change.IsSuccessStatusCode)
+        {
             LogSuccess($"domain {domain} updated to ip {ip}");
+            await SendTelegramMessage($"domain {domain} updated to ip {ip}");
+        }
         else
         {
             LogError($"domain {domain} update failed with error: {change.StatusCode}");

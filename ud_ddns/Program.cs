@@ -1,6 +1,7 @@
 ﻿using Google.Authenticator;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -9,6 +10,18 @@ using Telegram.Bot;
 var tgToken = string.Empty;
 var tgChatId = 0L;
 TelegramBotClient? tgBot = null;
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.Console(
+        theme: Serilog.Sinks.SystemConsole.Themes.AnsiConsoleTheme.Code,
+        outputTemplate: "[{Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: "ud_ddns.log",
+        outputTemplate: "[{Level:u3}] {Message:lj}{NewLine}{Exception}",
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 31)
+    .CreateLogger();
 
 try
 {
@@ -96,7 +109,7 @@ try
 
     var ip = await client.GetStringAsync("https://api.ipify.org/");
     //var ip = "1.1.1.1";
-    LogInfo($"current ip is {ip}");
+    Log.Information("current ip is {Ip}", ip);
 
     client.DefaultRequestHeaders.Add("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9");
     client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36");
@@ -160,7 +173,7 @@ try
         var get_records_response = await client.GetAsync($"https://www.united-domains.de/pfapi/dns/domain/{domain_id}/records");
         if (!get_records_response.IsSuccessStatusCode)
         {
-            LogError($"domain {domain} update failed, couldn't get records");
+            Log.Error("domain {Domain} update failed, couldn't get records", domain);
             await SendTelegramMessage($"domain {domain} update failed, couldn't get records");
             continue;
         }
@@ -207,12 +220,12 @@ try
         var change = await client.PutAsync($"https://www.united-domains.de/pfapi/dns/domain/{domain_id}/records", new StringContent(json, Encoding.UTF8, "application/json"));
         if (change.IsSuccessStatusCode)
         {
-            LogSuccess($"domain {domain} updated to ip {ip}");
+            Log.Information("domain {Domain} updated to ip {Ip}", domain, ip);
             await SendTelegramMessage($"domain {domain} updated to ip {ip}");
         }
         else
         {
-            LogError($"domain {domain} update failed with error: {change.StatusCode}");
+            Log.Error("domain {Domain} update failed with error: {StatusCode}", domain, change.StatusCode);
             await SendTelegramMessage($"domain {domain} update failed with error: {change.StatusCode}");
         }
     }
@@ -221,33 +234,13 @@ try
 }
 catch (Exception ex)
 {
-    LogError(ex.Message);
+    Log.Error(ex, "{Message}", ex.Message);
     await SendTelegramMessage($"ud_ddns error: {ex.Message}");
     return 1;
 }
-
-static void LogError(string text)
+finally
 {
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine(text);
-    File.AppendAllText("ud_ddns.log", $"[ERROR] {text}{Environment.NewLine}");
-    Console.ForegroundColor = ConsoleColor.White;
-}
-
-static void LogSuccess(string text)
-{
-    Console.ForegroundColor = ConsoleColor.Green;
-    Console.WriteLine(text);
-    File.AppendAllText("ud_ddns.log", $"[SUCCESS] {text}{Environment.NewLine}");
-    Console.ForegroundColor = ConsoleColor.White;
-}
-
-static void LogInfo(string text)
-{
-    Console.ForegroundColor = ConsoleColor.Blue;
-    Console.WriteLine(text);
-    File.AppendAllText("ud_ddns.log", $"[INFO] {text}{Environment.NewLine}");
-    Console.ForegroundColor = ConsoleColor.White;
+    Log.CloseAndFlush();
 }
 
 async Task SendTelegramMessage(string message)
@@ -261,6 +254,6 @@ async Task SendTelegramMessage(string message)
     }
     catch (Exception ex)
     {
-        LogError($"failed to send Telegram notification: {ex.Message}");
+        Log.Error(ex, "failed to send Telegram notification: {Message}", ex.Message);
     }
 }

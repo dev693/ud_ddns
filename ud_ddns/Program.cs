@@ -7,9 +7,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Telegram.Bot;
 
-var tgToken = string.Empty;
-var tgChatId = 0L;
-TelegramBotClient? tgBot = null;
+var telegramChatId = 0L;
+TelegramBotClient? telegramBot = null;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
@@ -25,78 +24,21 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    var mail = string.Empty;
-    var password = string.Empty;
-    var tfa = string.Empty;
-    var domains = Array.Empty<string>();
+    var mail = args.SkipWhile(a => a != "-mail").Skip(1).Take(1).FirstOrDefault() ?? string.Empty;
+    var password = args.SkipWhile(a => a != "-pw").Skip(1).Take(1).FirstOrDefault() ?? string.Empty;
+    var tfa = args.SkipWhile(a => a != "-tfa").Skip(1).Take(1).FirstOrDefault() ?? string.Empty;
+    var domains = args.SkipWhile(a => a != "-domain").Skip(1).TakeWhile(a => !a.StartsWith("-")).Select(a => a.Trim().ToLowerInvariant()).ToArray();
+    var telegramToken = args.SkipWhile(a => a != "-tg_token").Skip(1).Take(1).FirstOrDefault() ?? string.Empty;
 
-    for (int i = 0; i < args.Length; i++)
-    {
-        var arg = args[i].Trim();
-
-        if (arg == "-mail")
-        {
-            if (++i >= args.Length)
-                throw new ArgumentException("mail not specified");
-
-            mail = args[i];
-        }
-
-        if (arg == "-pw")
-        {
-            if (++i >= args.Length)
-                throw new ArgumentException("pw not specified");
-
-            password = args[i];
-        }
-
-        if (arg == "-tfa")
-        {
-            if (++i >= args.Length)
-                throw new ArgumentException("tfa not specified");
-
-            tfa = args[i];
-        }
-
-        if (arg == "-domain")
-        {
-            var list = new List<string>();
-           
-            for (i++; i < args.Length; i++)
-            {
-                if (args[i].StartsWith("-"))
-                    break;
-
-                list.Add(args[i].Trim().ToLowerInvariant());
-            }
-
-            domains = list.ToArray();
-        }
-
-        if (arg == "-tg_token")
-        {
-            if (++i >= args.Length)
-                throw new ArgumentException("tg_token not specified");
-
-            tgToken = args[i];
-        }
-
-        if (arg == "-tg_chatid")
-        {
-            if (++i >= args.Length)
-                throw new ArgumentException("tg_chatid not specified");
-
-            if (!long.TryParse(args[i], out tgChatId))
-                throw new ArgumentException("tg_chatid must be a valid numeric chat ID");
-        }
-
-    }
+    var telegramChatIdStr = args.SkipWhile(a => a != "-tg_chatid").Skip(1).Take(1).FirstOrDefault();
+    if (telegramChatIdStr is not null && !long.TryParse(telegramChatIdStr, out telegramChatId))
+        throw new ArgumentException("tg_chatid must be a valid numeric chat ID");
 
     if (string.IsNullOrEmpty(mail) || string.IsNullOrEmpty(password) || domains.Length == 0)
         throw new ArgumentException("Usage: -mail <mail> -pw <password> -domain <domain1> <domain2> [-tg_token <token> -tg_chatid <chatid>]");
 
-    if (!string.IsNullOrEmpty(tgToken) && tgChatId != 0)
-        tgBot = new TelegramBotClient(tgToken);
+    if (!string.IsNullOrEmpty(telegramToken) && telegramChatId != 0)
+        telegramBot = new TelegramBotClient(telegramToken);
 
     var cookieContainer = new CookieContainer();
     var client = new HttpClient(new HttpClientHandler()
@@ -174,7 +116,7 @@ try
         if (!get_records_response.IsSuccessStatusCode)
         {
             Log.Error("domain {Domain} update failed, couldn't get records", domain);
-            await SendTelegramMessage($"domain {domain} update failed, couldn't get records");
+            await (telegramBot?.SendMessage(telegramChatId, $"domain {domain} update failed, couldn't get records") ?? Task.CompletedTask);
             continue;
         }
 
@@ -221,12 +163,12 @@ try
         if (change.IsSuccessStatusCode)
         {
             Log.Information("domain {Domain} updated to ip {Ip}", domain, ip);
-            await SendTelegramMessage($"domain {domain} updated to ip {ip}");
+            await (telegramBot?.SendMessage(telegramChatId, $"domain {domain} updated to ip {ip}") ?? Task.CompletedTask);
         }
         else
         {
             Log.Error("domain {Domain} update failed with error: {StatusCode}", domain, change.StatusCode);
-            await SendTelegramMessage($"domain {domain} update failed with error: {change.StatusCode}");
+            await (telegramBot?.SendMessage(telegramChatId, $"domain {domain} update failed with error: {change.StatusCode}") ?? Task.CompletedTask);
         }
     }
 
@@ -235,25 +177,10 @@ try
 catch (Exception ex)
 {
     Log.Error(ex, "{Message}", ex.Message);
-    await SendTelegramMessage($"ud_ddns error: {ex.Message}");
+    try { await (telegramBot?.SendMessage(telegramChatId, $"ud_ddns error: {ex.Message}") ?? Task.CompletedTask); } catch { }
     return 1;
 }
 finally
 {
     Log.CloseAndFlush();
-}
-
-async Task SendTelegramMessage(string message)
-{
-    if (tgBot is null)
-        return;
-
-    try
-    {
-        await tgBot.SendMessage(tgChatId, message);
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "failed to send Telegram notification: {Message}", ex.Message);
-    }
 }

@@ -131,6 +131,12 @@ try
         var record_domain = record["domain"];
         var record_subdomain = record["sub_domain"];
 
+        if (string.Equals(record_content?.ToString()?.Trim(), ip?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Information("domain {Domain} already points to {Ip}, skipping update", domain, ip);
+            continue;
+        }
+
         var payload = new Dictionary<string, object>()
         {
             ["record"] = new Dictionary<string, object?>()

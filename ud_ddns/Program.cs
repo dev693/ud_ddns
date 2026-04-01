@@ -28,14 +28,14 @@ try
     var password = args.SkipWhile(a => a != "-pw").Skip(1).Take(1).FirstOrDefault() ?? string.Empty;
     var tfa = args.SkipWhile(a => a != "-tfa").Skip(1).Take(1).FirstOrDefault() ?? string.Empty;
     var domains = args.SkipWhile(a => a != "-domain").Skip(1).TakeWhile(a => !a.StartsWith("-")).Select(a => a.Trim().ToLowerInvariant()).ToArray();
-    var telegramToken = args.SkipWhile(a => a != "-tg_token").Skip(1).Take(1).FirstOrDefault() ?? string.Empty;
+    var telegramToken = args.SkipWhile(a => a != "-tt").Skip(1).Take(1).FirstOrDefault() ?? string.Empty;
 
-    var telegramChatIdStr = args.SkipWhile(a => a != "-tg_chatid").Skip(1).Take(1).FirstOrDefault();
+    var telegramChatIdStr = args.SkipWhile(a => a != "-tc").Skip(1).Take(1).FirstOrDefault();
     if (telegramChatIdStr is not null && !long.TryParse(telegramChatIdStr, out telegramChatId))
-        throw new ArgumentException("tg_chatid must be a valid numeric chat ID");
+        throw new ArgumentException("tc must be a valid numeric chat ID");
 
     if (string.IsNullOrEmpty(mail) || string.IsNullOrEmpty(password) || domains.Length == 0)
-        throw new ArgumentException("Usage: -mail <mail> -pw <password> -domain <domain1> <domain2> [-tg_token <token> -tg_chatid <chatid>]");
+        throw new ArgumentException("Usage: -mail <mail> -pw <password> -domain <domain1> <domain2> [-tt <token> -tc <chatid>]");
 
     if (!string.IsNullOrEmpty(telegramToken) && telegramChatId != 0)
         telegramBot = new TelegramBotClient(telegramToken);

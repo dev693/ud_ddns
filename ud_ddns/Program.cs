@@ -111,7 +111,18 @@ try
     {
         var segments = domain.Split(".");
         var main_domain = $"{segments[^2]}.{segments[^1]}";
-        var domain_id = domain_list["data"]!.First(d => d!["name"]!.ToString() == main_domain)!["id"]!;
+        var sub_domain = domain.Equals(main_domain, StringComparison.OrdinalIgnoreCase)
+            ? "@"
+            : domain[..^(main_domain.Length + 1)];
+
+        var domain_entry = domain_list["data"]!.FirstOrDefault(d => d!["name"]!.ToString() == main_domain);
+        if (domain_entry is null)
+        {
+            Log.Error("domain {Domain} update failed, main domain {MainDomain} not found in account", domain, main_domain);
+            await (telegramBot?.SendMessage(telegramChatId, $"domain {domain} update failed, {main_domain} not found in account") ?? Task.CompletedTask);
+            continue;
+        }
+        var domain_id = domain_entry["id"]!;
         var get_records_response = await client.GetAsync($"https://www.united-domains.de/pfapi/dns/domain/{domain_id}/records");
         if (!get_records_response.IsSuccessStatusCode)
         {
@@ -122,7 +133,13 @@ try
 
         var dns_recorods = JObject.Parse(await get_records_response.Content.ReadAsStringAsync())!;
 
-        var record = dns_recorods["data"]!["A"]!.First(e => e!["filter_value"]!.ToString() == domain)!;
+        var record = dns_recorods["data"]?["A"]?.FirstOrDefault(e => e!["sub_domain"]!.ToString() == sub_domain);
+        if (record is null)
+        {
+            Log.Error("domain {Domain} update failed, no matching A record (sub_domain {SubDomain})", domain, sub_domain);
+            await (telegramBot?.SendMessage(telegramChatId, $"domain {domain} update failed, no matching A record") ?? Task.CompletedTask);
+            continue;
+        }
 
         var record_id = record["id"];
         var record_type = record["udag_record_type"];
